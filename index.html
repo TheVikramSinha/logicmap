@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>LogicMap | Professional Database Schema Builder</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%233b82f6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 6c0 1.657 4.03 3 9 3s9-1.343 9-3'/%3E%3Cpath d='M3 6v14c0 1.657 4.03 3 9 3s9-1.343 9-3V6'/%3E%3Cpath d='M3 13c0 1.657 4.03 3 9 3s9-1.343 9-3'/%3E%3C/svg%3E">
+    <meta name="description" content="A powerful, open-source Entity Relationship Diagram (ERD) tool for developers. Visualize complex database schemas with auto-routing grid lines and export high-fidelity snapshots.">
+    <meta name="keywords" content="Database Schema Builder, ER Diagram Tool, SQL Visualizer, Entity Relationship Diagram, DB Schema Designer, Free ERD Tool, LogicMap, Vikram Kumar Sinha, Open Source DB Tool, System Design">
+    <meta name="author" content="Vikram Kumar Sinha">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://thevikramsinha.github.io/logicmap">
+
+    <meta property="og:title" content="LogicMap by Vikram Kumar Sinha">
+    <meta property="og:description" content="Build, visualize, and export complex database schemas directly in your browser. No login required.">
+    <meta property="og:url" content="https://thevikramsinha.github.io/logicmap">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="LogicMap">
+    <meta property="og:image" content="https://thevikramsinha.github.io/logicmap/social-preview.jpg">
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>❖</text></svg>">
+</head>
+<body>
+
+    <header class="command-bar">
+        <div class="brand">
+            <span class="logo-icon">❖</span>
+            <span class="logo-text">LogicMap</span>
+        </div>
+        <div class="actions">
+            <div class="zoom-controls">
+                <button onclick="resetView()" class="btn icon-btn" title="Reset View">🎯</button>
+                <span id="zoom-level">100%</span>
+            </div>
+            <div class="divider"></div>
+            <button onclick="undo()" class="btn icon-btn" title="Undo (Ctrl+Z)">↩️</button>
+            <button onclick="openNewTableModal()" class="btn primary">+ New Table</button>
+            <button onclick="openModal('importModal')" class="btn secondary">Smart Import</button>
+            <div class="divider"></div>
+            <button onclick="saveProject()" class="btn icon-btn" title="Save Project">💾</button>
+            <button onclick="document.getElementById('fileInput').click()" class="btn icon-btn" title="Load Project">📂</button>
+            <button onclick="exportSnapshot()" class="btn icon-btn" title="Export HTML Snapshot">📤 Export</button>
+            <input type="file" id="fileInput" style="display:none" onchange="loadProject(this)">
+        </div>
+    </header>
+
+    <div class="workspace">
+        <div id="viewport" class="viewport">
+            <div id="world" class="world">
+                <svg id="connectionsLayer">
+                    <defs>
+                        <marker id="arrow-head" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+                            <path d="M0,2 L10,6 L0,10" fill="none" stroke="#2b2b2b" stroke-width="1.2" />
+                        </marker>
+                        <marker id="arrow-active" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+                            <path d="M0,2 L10,6 L0,10" fill="none" stroke="#ef4444" stroke-width="1.5" />
+                        </marker>
+                    </defs>
+                </svg>
+                </div>
+        </div>
+
+        <aside class="control-tower">
+            <div class="panel-section">
+                <h3>Relationship Builder</h3>
+                <div class="dropdown-group">
+                    <div>
+                        <label>Source</label>
+                        <select id="sourceTable" onchange="updateColumnLists()"></select>
+                    </div>
+                    <div>
+                        <label>Target</label>
+                        <select id="targetTable" onchange="updateColumnLists()"></select>
+                    </div>
+                </div>
+                <div class="column-mapper">
+                    <div class="col-list-wrapper"><ul id="sourceCols" class="column-list"></ul></div>
+                    <div class="col-list-wrapper"><ul id="targetCols" class="column-list"></ul></div>
+                </div>
+                <div class="action-buttons">
+                    <button onclick="addRelationship('1:1')" class="btn-relation">Link 1:1</button>
+                    <button onclick="addRelationship('1:N')" class="btn-relation">Link 1:N</button>
+                </div>
+            </div>
+            <div class="panel-section flex-grow">
+                <h3>Connections</h3>
+                <ul id="relationshipList" class="rel-list"></ul>
+            </div>
+        </aside>
+    </div>
+
+    <div id="importModal" class="modal">
+        <div class="modal-content">
+            <h2>Smart Import</h2>
+            <textarea id="importText" placeholder="Paste schema block here..."></textarea>
+            <input type="text" id="importTableName" placeholder="Table Name">
+            <div class="modal-actions">
+                <button onclick="closeModal('importModal')" class="btn secondary">Cancel</button>
+                <button onclick="processSmartImport()" class="btn primary">Import</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="newTableModal" class="modal">
+        <div class="modal-content large">
+            <h2>Manage Table</h2>
+            <input type="text" id="manualTableName" placeholder="Table Name">
+            <div class="columns-header">
+                <label style="flex:2">Column Name</label>
+                <label style="flex:1">Type</label>
+                <label style="width:30px"></label>
+            </div>
+            <div id="manualColumnList" class="manual-col-list"></div>
+            <button onclick="addManualColumnRow()" class="btn secondary full-width" style="margin-top:10px">+ Add Column</button>
+            <div class="modal-actions" style="margin-top:20px">
+                <button onclick="closeModal('newTableModal')" class="btn secondary">Cancel</button>
+                <button onclick="processManualTable()" class="btn primary">Save Table</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="deleteModal" class="modal">
+        <div class="modal-content" style="width: 350px;">
+            <h2>Delete Table?</h2>
+            <p style="color: #cbd5e1; font-size: 13px; margin-bottom: 20px;">
+                Are you sure? This will remove connected relationships.
+            </p>
+            <div class="modal-actions">
+                <button onclick="closeModal('deleteModal')" class="btn secondary">Cancel</button>
+                <button onclick="confirmDelete()" class="btn danger">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
