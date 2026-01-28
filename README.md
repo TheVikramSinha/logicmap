@@ -19,7 +19,7 @@ It features a true **infinite canvas**, **intelligent face-to-face routing** (Be
 
 * **🧠 Smart Layout Engine:** Automatically detects canvas usage and places new tables in a neat grid in empty space. No more overlapping stacks.
 * **🧜‍♀️ Mermaid.js Support:** Import existing Mermaid `erDiagram` code directly, or export your visual canvas back to Mermaid syntax.
-* **🎨 Color-Coded Grouping:** Every import gets a unique color theme. Organize manual tables with built-in color presets (Blue, Emerald, Purple, Amber, Red, Gray).
+* **🎨 50+ Color Themes & Hex Support:** Every import batch is automatically assigned a unique color from a high-contrast 50-color palette. For manual tables, use the integrated native color picker to select any custom Hex color for headers, allowing for unlimited organizational possibilities.
 * **🔗 Intelligent Routing:** Relationships are drawn with smooth Bezier curves that automatically detect the best "face" (Top, Bottom, Left, Right) to connect to, keeping your diagram clean.
 * **📦 Group Integrity:** Move entire clusters of tables at once using the Group Handle (⋈) or Shift+Drag.
 * **🔍 True Infinite Canvas:** Unbounded panning and zooming allow you to manage massive schemas with hundreds of tables.
