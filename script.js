@@ -10,12 +10,22 @@ let isDragging = false;
 let startDrag = { x: 0, y: 0 };
 let isDirty = false;
 
-// Selection
+// Selection State
 let selectedSourceCols = new Set();
 let selectedTargetCols = new Set();
 
-// Batch Colors
-const COLOR_PALETTE = ['blue', 'green', 'purple', 'amber', 'red', 'gray'];
+// 50-Color Hex Palette
+const COLOR_PALETTE = [
+    '#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '#475569',
+    '#db2777', '#9333ea', '#4f46e5', '#0891b2', '#0d9488', '#16a34a',
+    '#ca8a04', '#ea580c', '#e11d48', '#be123c', '#86198f', '#6d28d9',
+    '#1e40af', '#155e75', '#115e59', '#166534', '#854d0e', '#9a3412',
+    '#9f1239', '#881337', '#701a75', '#581c87', '#3730a3', '#1e3a8a',
+    '#172554', '#064e3b', '#065f46', '#042f2e', '#4a044e', '#450a0a',
+    '#57534e', '#44403c', '#292524', '#1c1917', '#18181b', '#27272a',
+    '#be185d', '#a21caf', '#7e22ce', '#6b21a8', '#c026d3', '#0284c7',
+    '#0369a1', '#075985'
+];
 let importBatchCount = 0;
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -39,7 +49,7 @@ function getSmartCoordinates() {
             if (t.x + 200 > maxX) maxX = t.x + 200;
             if (t.y < minY) minY = t.y;
         });
-        maxX += 150;
+        maxX += 150; // Buffer
     } else {
         maxX = 100;
     }
@@ -128,7 +138,7 @@ function drawRelationships() {
             const r2 = eEl.getBoundingClientRect();
             const w = document.getElementById('world').getBoundingClientRect();
             const s = view.scale;
-            const off = 100000; 
+            const off = 100000; // Infinite Offset
 
             const sX = (r1.left + r1.width/2 - w.left)/s + off;
             const sY = (r1.top + r1.height/2 - w.top)/s + off;
@@ -161,19 +171,18 @@ function drawRelationships() {
     });
 }
 
-/* --- GROUP DRAG LOGIC (THE FIX) --- */
+/* --- DRAGGING LOGIC (GROUP + SINGLE) --- */
 let activeTbl = null;
 let offsetTbl = { x:0, y:0 };
 let groupDragData = []; 
 let isGroupDrag = false;
 
-// 1. Regular Move (Header)
+// 1. Regular Move via Header
 function startDragTable(e, div) {
-    // Only drag if not clicking buttons
     if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
     
     e.stopPropagation();
-    e.preventDefault(); // Stop text selection
+    e.preventDefault();
     activeTbl = div;
     const t = tables.find(x => x.id === activeTbl.id);
     groupDragData = [];
@@ -193,7 +202,7 @@ function startDragTable(e, div) {
     window.addEventListener('mouseup', stopDragTable);
 }
 
-// 2. Explicit Group Move (The Icon)
+// 2. Explicit Group Move via Handle (⋈)
 function startGroupDrag(e, id) {
     e.stopPropagation();
     e.preventDefault();
@@ -210,24 +219,21 @@ function startGroupDrag(e, id) {
 
 function initGroupDrag(t, e) {
     isGroupDrag = true;
-    // Find all peers
     const group = tables.filter(tbl => tbl.groupId === t.groupId);
     
-    // Calculate offsets relative to the MOUSE
-    // Mouse World Pos
-    const mx = (e.clientX)/view.scale;
-    const my = (e.clientY)/view.scale;
+    // Calculate based on World Mouse Position
+    const startWorldX = (e.clientX - view.x) / view.scale;
+    const startWorldY = (e.clientY - view.y) / view.scale;
     
     group.forEach(g => {
-        // Visual Feedback
         const el = document.getElementById(g.id);
-        if(el) el.style.opacity = '0.7';
+        if(el) el.style.opacity = '0.7'; // Feedback
         
         groupDragData.push({
             id: g.id,
-            // Offset from mouse to this table's Top-Left
-            dx: g.x - mx,
-            dy: g.y - my
+            // Store delta from mouse to table top-left
+            dx: g.x - startWorldX,
+            dy: g.y - startWorldY
         });
     });
 }
@@ -235,60 +241,14 @@ function initGroupDrag(t, e) {
 function onDragTable(e) {
     if (!activeTbl) return;
     
-    const mx = e.clientX / view.scale;
-    const my = e.clientY / view.scale;
-
     if (isGroupDrag) {
-        // Update entire group
-        groupDragData.forEach(item => {
-            const tbl = tables.find(t => t.id === item.id);
-            if(tbl) {
-                // New Pos = Mouse + Delta
-                // NOTE: We need to account for infinite canvas offset in visual, 
-                // but the Model (tbl.x) is absolute.
-                // Wait, 'dx' was calculated using raw model coordinates (g.x). 
-                // So (mx + dx) should equal new (g.x).
-                
-                // Correction: Viewport offset logic might interfere?
-                // Viewport transform is handled by CSS. e.clientX is screen.
-                // mx is (Screen - ViewOffset)/Scale. This is World Coord.
-                // So tbl.x should simply be mx + dx.
-                
-                // BUT, 'mx' includes the view translation in the init?
-                // In init: mx = (e.clientX)/view.scale.
-                // Actually, strict World Mouse = (e.clientX - view.x)/view.scale.
-                
-                // Let's refine the Mouse World Calc to be consistent.
-                const worldMouseX = (e.clientX - view.x) / view.scale;
-                const worldMouseY = (e.clientY - view.y) / view.scale;
-                
-                // If we recalculated init based on this, we are good.
-                // Let's stick to the 'delta' method which is safer.
-            }
-        });
-        
-        // BETTER GROUP LOGIC: DELTAS
-        // Just use movementX/Y? No, erratic.
-        // Let's use the stable Start Point.
-        
-        // Re-implementing simplified:
-        // We captured offsets from "World Mouse" to "Table Pos".
+        // Current World Mouse
         const worldMouseX = (e.clientX - view.x) / view.scale;
         const worldMouseY = (e.clientY - view.y) / view.scale;
         
         groupDragData.forEach(item => {
             const tbl = tables.find(t => t.id === item.id);
             if(tbl) {
-                // item.dx was (Table.x - WorldMouseStart.x)
-                // New Table.x = CurrentWorldMouse.x + item.dx
-                
-                // Wait, I calculated offsets wrong in Init.
-                // Let's rely on the first calculation being correct.
-                // In Init: g.x (Model) - mx (Raw Screen/Scale).
-                
-                // CORRECT MATH:
-                // Model X = (ScreenX - ViewX) / Scale
-                
                 tbl.x = worldMouseX + item.dx;
                 tbl.y = worldMouseY + item.dy;
                 
@@ -299,10 +259,8 @@ function onDragTable(e) {
                 }
             }
         });
-        
     } else {
         // Single Table Logic
-        // New X = (Screen - View) / Scale - ClickOffset
         const currentX = (e.clientX - view.x) / view.scale - offsetTbl.x;
         const currentY = (e.clientY - view.y) / view.scale - offsetTbl.y;
         
@@ -317,7 +275,6 @@ function onDragTable(e) {
 
 function stopDragTable() {
     if(isGroupDrag) {
-        // Restore opacity
         groupDragData.forEach(item => {
             const el = document.getElementById(item.id);
             if(el) el.style.opacity = '1';
@@ -331,29 +288,7 @@ function stopDragTable() {
     saveState();
 }
 
-// FIX: Update Init Logic to use Correct World Coords
-function initGroupDrag(t, e) {
-    isGroupDrag = true;
-    const group = tables.filter(tbl => tbl.groupId === t.groupId);
-    
-    // Correct World Mouse Position
-    const startWorldX = (e.clientX - view.x) / view.scale;
-    const startWorldY = (e.clientY - view.y) / view.scale;
-    
-    group.forEach(g => {
-        const el = document.getElementById(g.id);
-        if(el) el.style.opacity = '0.8'; // Feedback
-        
-        groupDragData.push({
-            id: g.id,
-            // Store vector from Mouse to Table Top-Left
-            dx: g.x - startWorldX,
-            dy: g.y - startWorldY
-        });
-    });
-}
-
-/* --- RENDER UI (UPDATED WITH GROUP HANDLE) --- */
+/* --- RENDER UI (WITH COLOR & HANDLE) --- */
 function renderTableUI(table) {
     const existing = document.getElementById(table.id); 
     if(existing) existing.remove();
@@ -363,14 +298,16 @@ function renderTableUI(table) {
     div.id = table.id; 
     div.style.left = table.x + 'px'; 
     div.style.top = table.y + 'px';
-    div.setAttribute('data-color', table.color || 'blue');
+    
+    // Inline Hex Color
+    const headerColor = table.color || '#2563eb';
 
-    // Add Group Handle Icon (⋈) if part of a group
+    // Group Handle
     const groupIcon = table.groupId ? 
-        `<span class="group-handle" title="Drag to move entire group" onmousedown="startGroupDrag(event, '${table.id}')">⋈</span>` : '';
+        `<span class="group-handle" title="Drag to move group" onmousedown="startGroupDrag(event, '${table.id}')">⋈</span>` : '';
 
     div.innerHTML = `
-        <div class="table-header" onmousedown="startDragTable(event, this.parentElement)">
+        <div class="table-header" onmousedown="startDragTable(event, this.parentElement)" style="background-color: ${headerColor}">
             <div style="display:flex; align-items:center; gap:6px;">
                 ${groupIcon}
                 <span>${table.name}</span>
@@ -391,8 +328,8 @@ function renderTableUI(table) {
     document.getElementById('world').appendChild(div);
 }
 
-/* --- ADD TABLE --- */
-function addTable(name, columns, color='blue', x=null, y=null) {
+/* --- ADD & IMPORT --- */
+function addTable(name, columns, color='#2563eb', x=null, y=null) {
     if (x === null) {
         const pos = getSmartCoordinates();
         x = pos.x;
@@ -410,7 +347,35 @@ function addTable(name, columns, color='blue', x=null, y=null) {
     return tbl.id;
 }
 
-/* --- LOAD PROJECT --- */
+function processManualTable() {
+    const name = document.getElementById('manualTableName').value;
+    const color = document.getElementById('manualTableColor').value;
+    if(!name) return alert("Enter Name");
+    
+    const cols = [];
+    document.querySelectorAll('#manualColumnList .col-row').forEach(r => {
+        const cName = r.querySelector('.col-name').value.trim();
+        const cType = r.querySelector('.col-type').value;
+        if(cName) cols.push({ name: cName, type: cType });
+    });
+
+    if (cols.length === 0) return alert("Add at least one column");
+
+    if(editingId) {
+        saveState();
+        const t = tables.find(x => x.id === editingId);
+        t.name = name; t.columns = cols; t.color = color;
+        renderTableUI(t); drawRelationships();
+    } else {
+        const pos = getSmartCoordinates();
+        addTable(name, cols, color, pos.x, pos.y);
+        view.x = -pos.x * view.scale + 150;
+        view.y = -pos.y * view.scale + 150;
+        updateTransform();
+    }
+    document.getElementById('newTableModal').style.display='none';
+}
+
 function loadProject(input) {
     const f = input.files[0]; if(!f) return;
     const r = new FileReader();
@@ -435,11 +400,13 @@ function loadProject(input) {
                 t.color = batchColor;
 
                 if (t.x === undefined) {
+                    // Grid Layout
                     const col = i % 3; 
                     const row = Math.floor(i / 3);
                     t.x = startPos.x + (col * 250);
                     t.y = startPos.y + (row * 350);
                 } else {
+                    // Shift existing block
                     t.x = (t.x || 0) + startPos.x;
                     t.y = (t.y || 0) + 50; 
                 }
@@ -461,51 +428,16 @@ function loadProject(input) {
                     }
                 });
             }
-            
-            drawRelationships();
-            updateDropdowns(); 
-            renderRelationshipList();
-
+            drawRelationships(); updateDropdowns(); renderRelationshipList();
             if (tables.length > 0) {
                 view.x = -loadedMinX * view.scale + 100; 
                 view.y = -loadedMinY * view.scale + 100;
                 updateTransform();
             }
-
-        } catch (err) {
-            alert("Error loading JSON: " + err);
-        }
+        } catch (err) { alert("Error loading JSON: " + err); }
     };
     r.readAsText(f);
     input.value = '';
-}
-
-/* --- MANUAL & IMPORT --- */
-function processManualTable() {
-    const name = document.getElementById('manualTableName').value;
-    const color = document.getElementById('manualTableColor').value;
-    if(!name) return alert("Enter Name");
-    const cols = [];
-    document.querySelectorAll('#manualColumnList .col-row').forEach(r => {
-        const cName = r.querySelector('.col-name').value.trim();
-        const cType = r.querySelector('.col-type').value;
-        if(cName) cols.push({ name: cName, type: cType });
-    });
-    if (cols.length === 0) return alert("Add at least one column");
-
-    if(editingId) {
-        saveState();
-        const t = tables.find(x => x.id === editingId);
-        t.name = name; t.columns = cols; t.color = color;
-        renderTableUI(t); drawRelationships();
-    } else {
-        const pos = getSmartCoordinates();
-        addTable(name, cols, color, pos.x, pos.y);
-        view.x = -pos.x * view.scale + 150;
-        view.y = -pos.y * view.scale + 150;
-        updateTransform();
-    }
-    document.getElementById('newTableModal').style.display='none';
 }
 
 function processSmartImport() {
@@ -526,7 +458,7 @@ function processSmartImport() {
             const p = l.trim().split(/\s+/);
             if(p.length>=2) cols.push({ type: p[0], name: p[1] });
         });
-        addTable(name || 'Imported', cols, 'blue', xOff, yOff);
+        addTable(name || 'Imported', cols, '#2563eb', xOff, yOff);
     }
     
     document.getElementById('importText').value = '';
@@ -572,15 +504,42 @@ function parseMermaid(code, startX, startY) {
         t.groupId = batchGroupId;
         createdTables[tableName] = { id, cols, name: tableName };
     }
-    
     const relRegex = /([a-zA-Z0-9_]+)\s+([}|][|o]?(?:--|\.\.)[|o]?[|{])\s+([a-zA-Z0-9_]+)/g; 
     while ((match = relRegex.exec(code)) !== null) { const t1Name = match[1]; const t2Name = match[3]; const symbol = match[2]; const t1 = createdTables[t1Name]; const t2 = createdTables[t2Name]; if(t1 && t2) { let fromCol = t1.cols[0]?.name || 'unknown'; let toCol = t2.cols[0]?.name || 'unknown'; let type = '1:1'; if (symbol.includes('{') || symbol.includes('}')) type = '1:N'; relationships.push({ id: 'rel_' + Date.now() + Math.random(), fromTable: t1.id, fromCol: fromCol, toTable: t2.id, toCol: toCol, type: type }); } } 
     drawRelationships(); renderRelationshipList();
 }
 
+/* --- EXPORT SNAPSHOT (HEX COLORS) --- */
+function exportSnapshot() {
+    if (tables.length === 0) return alert("Nothing to export!");
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    tables.forEach(t => { if (t.x < minX) minX = t.x; if (t.y < minY) minY = t.y; if (t.x + 200 > maxX) maxX = t.x + 200; if (t.y + 200 > maxY) maxY = t.y + 200; });
+    const padding = 50; const width = (maxX - minX) + (padding * 2); const height = (maxY - minY) + (padding * 2); const shiftX = -minX + padding; const shiftY = -minY + padding;
+    let svgPaths = "";
+    relationships.forEach(rel => {
+        const startT = tables.find(t => t.id === rel.fromTable); const endT = tables.find(t => t.id === rel.toTable); if(!startT || !endT) return;
+        const startRowIdx = startT.columns.findIndex(c => c.name === rel.fromCol); const endRowIdx = endT.columns.findIndex(c => c.name === rel.toCol);
+        let startY = (startT.y + shiftY) + 37 + (startRowIdx * 29) + 14; let endY = (endT.y + shiftY) + 37 + (endRowIdx * 29) + 14;
+        let startX = (startT.x + shiftX) + 200; let endX = (endT.x + shiftX);
+        let d = `M ${startX} ${startY} C ${startX+50} ${startY}, ${endX-50} ${endY}, ${endX} ${endY}`;
+        svgPaths += `<path d="${d}" stroke="#2b2b2b" stroke-width="1.2" fill="none" marker-end="url(#arrow-head)" />`;
+    });
+    
+    const tablesHTML = tables.map(t => { 
+        const x = t.x + shiftX; const y = t.y + shiftY; 
+        const rows = t.columns.map(c => `<div class="row"><span>${c.name}</span><span class="type">${c.type}</span></div>`).join(''); 
+        const headerColor = t.color || '#2563eb'; // Export with inline Hex
+        return `<div class="table" style="left: ${x}px; top: ${y}px;"><div class="header" style="background:${headerColor}">${t.name}</div><div class="body">${rows}</div></div>`; 
+    }).join('');
+    
+    const viewerScript = `<script>let view={x:0,y:0,scale:1};const world=document.getElementById('world');let isDragging=false,start={x:0,y:0};window.addEventListener('mousedown',e=>{isDragging=true;start={x:e.clientX-view.x,y:e.clientY-view.y};document.body.style.cursor='grabbing'});window.addEventListener('mousemove',e=>{if(!isDragging)return;view.x=e.clientX-start.x;view.y=e.clientY-start.y;update()});window.addEventListener('mouseup',()=>{isDragging=false;document.body.style.cursor='default'});window.addEventListener('wheel',e=>{e.preventDefault();const worldX=(e.clientX-view.x)/view.scale;const worldY=(e.clientY-view.y)/view.scale;const delta=e.deltaY>0?-0.1:0.1;view.scale=Math.min(Math.max(0.1,view.scale+delta),4);view.x=e.clientX-(worldX*view.scale);view.y=e.clientY-(worldY*view.scale);update()},{passive:false});function update(){world.style.transform=\`translate(\${view.x}px,\${view.y}px) scale(\${view.scale})\`}<\/script>`;
+    const finalHTML = `<!DOCTYPE html><html><head><title>LogicMap Snapshot</title><style>body{margin:0;padding:0;background:#e5e7eb;font-family:'Inter',sans-serif;overflow:hidden;height:100vh;width:100vw}.viewport{width:100%;height:100%;cursor:grab;background-image:radial-gradient(#cbd5e1 1px,transparent 1px);background-size:20px 20px;background-color:#f8f9fa}.world{transform-origin:0 0;position:absolute;top:0;left:0}svg{position:absolute;width:${width}px;height:${height}px;pointer-events:none;overflow:visible}.table{position:absolute;width:200px;background:white;border:1px solid #cbd5e1;border-radius:6px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);z-index:10}.header{color:white;padding:8px 12px;font-size:13px;font-weight:600;border-radius:6px 6px 0 0}.body{padding:4px 0}.row{display:flex;justify-content:between;padding:6px 12px;font-size:12px;color:#1e293b;border-bottom:1px solid transparent}.type{color:#64748b;font-size:11px}</style><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet"></head><body><div class="viewport"><div id="world" class="world"><svg><defs><marker id="arrow-head" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="none" stroke="#2b2b2b" stroke-width="1" /></marker></defs>${svgPaths}</svg>${tablesHTML}</div></div>${viewerScript}</body></html>`;
+    const blob = new Blob([finalHTML], {type: "text/html"}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = "LogicMap_Snapshot.html"; a.click();
+}
+
 /* --- UTILS --- */
-function openEditTableModal(id, e) { if(e) e.stopPropagation(); editingId = id; const table = tables.find(t => t.id === id); document.getElementById('newTableModal').style.display = 'flex'; document.getElementById('manualTableName').value = table.name; document.getElementById('manualTableColor').value = table.color || 'blue'; document.getElementById('manualColumnList').innerHTML = ''; table.columns.forEach(c => addManualColumnRow(c.name, c.type)); }
-function openNewTableModal() { editingId = null; document.getElementById('newTableModal').style.display = 'flex'; document.getElementById('manualTableName').value = ''; document.getElementById('manualTableColor').value = 'blue'; document.getElementById('manualColumnList').innerHTML = ''; addManualColumnRow(); }
+function openEditTableModal(id, e) { if(e) e.stopPropagation(); editingId = id; const table = tables.find(t => t.id === id); document.getElementById('newTableModal').style.display = 'flex'; document.getElementById('manualTableName').value = table.name; document.getElementById('manualTableColor').value = table.color || '#2563eb'; document.getElementById('manualColumnList').innerHTML = ''; table.columns.forEach(c => addManualColumnRow(c.name, c.type)); }
+function openNewTableModal() { editingId = null; document.getElementById('newTableModal').style.display = 'flex'; document.getElementById('manualTableName').value = ''; document.getElementById('manualTableColor').value = '#2563eb'; document.getElementById('manualColumnList').innerHTML = ''; addManualColumnRow(); }
 let draggedRow = null;
 function addManualColumnRow(name='', type='string') { const list = document.getElementById('manualColumnList'); const row = document.createElement('div'); row.className = 'col-row'; row.draggable = true; row.addEventListener('dragstart', e => { draggedRow = row; row.classList.add('dragging'); }); row.addEventListener('dragend', () => { row.classList.remove('dragging'); draggedRow = null; }); list.addEventListener('dragover', e => { e.preventDefault(); const after = getDragAfterElement(list, e.clientY); if (!after) list.appendChild(draggedRow); else list.insertBefore(draggedRow, after); }); row.innerHTML = `<span style="cursor:grab; padding:5px; color:#64748b;">☰</span><input type="text" class="col-name" value="${name}" style="flex:2"><select class="col-type" style="flex:1"><option value="string" ${type==='string'?'selected':''}>String</option><option value="int" ${type==='int'?'selected':''}>Int</option><option value="boolean" ${type==='boolean'?'selected':''}>Bool</option><option value="date" ${type==='date'?'selected':''}>Date</option><option value="id" ${type==='id'?'selected':''}>ID</option></select><button class="btn-remove-col" onclick="this.parentElement.remove()">×</button>`; list.appendChild(row); }
 function getDragAfterElement(container, y) { const els = [...container.querySelectorAll('.col-row:not(.dragging)')]; return els.reduce((closest, child) => { const box = child.getBoundingClientRect(); const offset = y - box.top - box.height / 2; if (offset < 0 && offset > closest.offset) return { offset: offset, element: child }; else return closest; }, { offset: Number.NEGATIVE_INFINITY }).element; }
@@ -594,7 +553,6 @@ function deleteRel(id) { saveState(); relationships = relationships.filter(r => 
 function renderRelationshipList() { const list = document.getElementById('relationshipList'); list.innerHTML = ''; relationships.forEach(r => { const t1 = tables.find(t => t.id === r.fromTable)?.name; const t2 = tables.find(t => t.id === r.toTable)?.name; const li = document.createElement('li'); li.className = 'rel-item'; li.innerHTML = `<span>${t1}.${r.fromCol} → ${t2}.${r.toCol}</span> <span class="rel-delete" onclick="deleteRel('${r.id}')">×</span>`; list.appendChild(li); }); }
 function exportMermaid() { if (tables.length === 0) return alert("Nothing to export!"); let output = "erDiagram\n"; tables.forEach(t => { const safeName = t.name.replace(/[^a-zA-Z0-9_]/g, '_'); output += `    ${safeName} {\n`; t.columns.forEach(c => { const safeCol = c.name.replace(/[^a-zA-Z0-9_]/g, '_'); output += `        ${c.type} ${safeCol}\n`; }); output += `    }\n`; }); relationships.forEach(r => { const t1 = tables.find(t => t.id === r.fromTable).name.replace(/[^a-zA-Z0-9_]/g, '_'); const t2 = tables.find(t => t.id === r.toTable).name.replace(/[^a-zA-Z0-9_]/g, '_'); let symbol = '||--||'; if (r.type === '1:N' || r.type === 'N:1') symbol = '||--o{'; output += `    ${t1} ${symbol} ${t2} : "links_to"\n`; }); document.getElementById('exportText').value = output; document.getElementById('exportModal').style.display = 'flex'; }
 function saveProject(){ const blob = new Blob([JSON.stringify({tables, relationships})], {type:'application/json'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download='schema.json'; a.click(); }
-function exportSnapshot() { if (tables.length === 0) return alert("Nothing to export!"); let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity; tables.forEach(t => { if (t.x < minX) minX = t.x; if (t.y < minY) minY = t.y; if (t.x + 200 > maxX) maxX = t.x + 200; if (t.y + 200 > maxY) maxY = t.y + 200; }); const padding = 50; const width = (maxX - minX) + (padding * 2); const height = (maxY - minY) + (padding * 2); const shiftX = -minX + padding; const shiftY = -minY + padding; let svgPaths = ""; relationships.forEach(rel => { const startT = tables.find(t => t.id === rel.fromTable); const endT = tables.find(t => t.id === rel.toTable); if(!startT || !endT) return; const startRowIdx = startT.columns.findIndex(c => c.name === rel.fromCol); const endRowIdx = endT.columns.findIndex(c => c.name === rel.toCol); let startY = (startT.y + shiftY) + 37 + (startRowIdx * 29) + 14; let endY = (endT.y + shiftY) + 37 + (endRowIdx * 29) + 14; let startX = (startT.x + shiftX) + 200; let endX = (endT.x + shiftX); let d = `M ${startX} ${startY} C ${startX+50} ${startY}, ${endX-50} ${endY}, ${endX} ${endY}`; svgPaths += `<path d="${d}" stroke="#2b2b2b" stroke-width="1.2" fill="none" marker-end="url(#arrow-head)" />`; }); const tablesHTML = tables.map(t => { const x = t.x + shiftX; const y = t.y + shiftY; const rows = t.columns.map(c => `<div class="row"><span>${c.name}</span><span class="type">${c.type}</span></div>`).join(''); let headerColor = '#2563eb'; if(t.color === 'green') headerColor = '#059669'; if(t.color === 'purple') headerColor = '#7c3aed'; if(t.color === 'amber') headerColor = '#d97706'; if(t.color === 'red') headerColor = '#dc2626'; if(t.color === 'gray') headerColor = '#475569'; return `<div class="table" style="left: ${x}px; top: ${y}px;"><div class="header" style="background:${headerColor}">${t.name}</div><div class="body">${rows}</div></div>`; }).join(''); const viewerScript = `<script>let view={x:0,y:0,scale:1};const world=document.getElementById('world');let isDragging=false,start={x:0,y:0};window.addEventListener('mousedown',e=>{isDragging=true;start={x:e.clientX-view.x,y:e.clientY-view.y};document.body.style.cursor='grabbing'});window.addEventListener('mousemove',e=>{if(!isDragging)return;view.x=e.clientX-start.x;view.y=e.clientY-start.y;update()});window.addEventListener('mouseup',()=>{isDragging=false;document.body.style.cursor='default'});window.addEventListener('wheel',e=>{e.preventDefault();const worldX=(e.clientX-view.x)/view.scale;const worldY=(e.clientY-view.y)/view.scale;const delta=e.deltaY>0?-0.1:0.1;view.scale=Math.min(Math.max(0.1,view.scale+delta),4);view.x=e.clientX-(worldX*view.scale);view.y=e.clientY-(worldY*view.scale);update()},{passive:false});function update(){world.style.transform=\`translate(\${view.x}px,\${view.y}px) scale(\${view.scale})\`}<\/script>`; const finalHTML = `<!DOCTYPE html><html><head><title>LogicMap Snapshot</title><style>body{margin:0;padding:0;background:#e5e7eb;font-family:'Inter',sans-serif;overflow:hidden;height:100vh;width:100vw}.viewport{width:100%;height:100%;cursor:grab;background-image:radial-gradient(#cbd5e1 1px,transparent 1px);background-size:20px 20px;background-color:#f8f9fa}.world{transform-origin:0 0;position:absolute;top:0;left:0}svg{position:absolute;width:${width}px;height:${height}px;pointer-events:none;overflow:visible}.table{position:absolute;width:200px;background:white;border:1px solid #cbd5e1;border-radius:6px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);z-index:10}.header{color:white;padding:8px 12px;font-size:13px;font-weight:600;border-radius:6px 6px 0 0}.body{padding:4px 0}.row{display:flex;justify-content:between;padding:6px 12px;font-size:12px;color:#1e293b;border-bottom:1px solid transparent}.type{color:#64748b;font-size:11px}</style><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet"></head><body><div class="viewport"><div id="world" class="world"><svg><defs><marker id="arrow-head" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="none" stroke="#2b2b2b" stroke-width="1" /></marker></defs>${svgPaths}</svg>${tablesHTML}</div></div>${viewerScript}</body></html>`; const blob = new Blob([finalHTML], {type: "text/html"}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = "LogicMap_Snapshot.html"; a.click(); }
 function closeModal(id) { document.getElementById(id).style.display='none'; }
 function openModal(id) { document.getElementById(id).style.display='flex'; }
 function toggleHighlight(tid, col, e) { e.stopPropagation(); document.querySelectorAll('.db-table').forEach(t => t.classList.add('dimmed')); document.getElementById(tid).classList.remove('dimmed'); drawRelationships(); relationships.forEach(r => { if((r.fromTable===tid && r.fromCol===col) || (r.toTable===tid && r.toCol===col)) { const el = document.getElementById(r.id); if(el) { el.setAttribute('stroke', '#ef4444'); el.setAttribute('stroke-width', '1.5'); el.setAttribute('marker-end', 'url(#arrow-active)'); } document.getElementById(r.fromTable).classList.remove('dimmed'); document.getElementById(r.toTable).classList.remove('dimmed'); } }); document.getElementById('viewport').onclick = () => { document.querySelectorAll('.db-table').forEach(t => t.classList.remove('dimmed')); drawRelationships(); }; }

@@ -1,16 +1,16 @@
 :root {
-    --ui-bg: #1e293b; --ui-border: #334155; --ui-text: #f8fafc; --ui-text-muted: #94a3b8;
-    --canvas-bg: #f8f9fa; --table-bg: #ffffff; --table-text: #1e293b; --table-border: #cbd5e1;
-    --accent: #3b82f6; --danger: #ef4444;
-    --header-height: 50px; --sidebar-width: 340px;
-
-    /* THEMES */
-    --header-blue: #2563eb;
-    --header-green: #059669;
-    --header-purple: #7c3aed;
-    --header-amber: #d97706;
-    --header-red: #dc2626;
-    --header-gray: #475569;
+    --ui-bg: #1e293b;
+    --ui-border: #334155;
+    --ui-text: #f8fafc;
+    --ui-text-muted: #94a3b8;
+    --canvas-bg: #f8f9fa;
+    --table-bg: #ffffff;
+    --table-text: #1e293b;
+    --table-border: #cbd5e1;
+    --accent: #3b82f6;
+    --danger: #ef4444;
+    --header-height: 50px;
+    --sidebar-width: 340px;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; outline: none; }
@@ -22,7 +22,7 @@ body { font-family: 'Inter', sans-serif; background-color: var(--ui-bg); color: 
 .actions { display: flex; gap: 8px; align-items: center; }
 .divider { width: 1px; height: 20px; background: var(--ui-border); margin: 0 5px; }
 
-/* ZOOM UI */
+/* ZOOM CONTROLS */
 .zoom-controls { display: flex; align-items: center; gap: 4px; background: rgba(255,255,255,0.05); padding: 2px 4px; border-radius: 6px; border: 1px solid var(--ui-border); }
 #zoom-level { font-size: 11px; color: var(--ui-text-muted); min-width: 40px; text-align: center; font-weight: 500; }
 
@@ -33,30 +33,70 @@ body { font-family: 'Inter', sans-serif; background-color: var(--ui-bg); color: 
 .btn.icon-btn { background: transparent; color: var(--ui-text-muted); font-size: 16px; padding: 4px 8px; }
 .btn.icon-btn:hover { color: white; background: rgba(255,255,255,0.1); border-radius: 4px; }
 
-/* INFINITE CANVAS */
+/* INFINITE CANVAS CORE */
 .workspace { display: flex; height: calc(100vh - var(--header-height)); }
-.viewport { flex-grow: 1; overflow: hidden; background: var(--canvas-bg); background-image: radial-gradient(#cbd5e1 1px, transparent 1px); background-size: 20px 20px; cursor: grab; position: relative; }
+.viewport { 
+    flex-grow: 1; overflow: hidden; 
+    background: var(--canvas-bg); 
+    background-image: radial-gradient(#cbd5e1 1px, transparent 1px); 
+    background-size: 20px 20px; 
+    cursor: grab; position: relative; 
+}
 .viewport:active { cursor: grabbing; }
-.world { position: absolute; top: 0; left: 0; width: 0; height: 0; transform-origin: 0 0; overflow: visible; }
-svg#connectionsLayer { position: absolute; top: -100000px; left: -100000px; width: 200000px; height: 200000px; overflow: visible; pointer-events: none; z-index: 0; }
+
+.world { 
+    position: absolute; 
+    top: 0; left: 0; 
+    width: 0; height: 0; /* Allows overflow */
+    transform-origin: 0 0; 
+    overflow: visible; 
+}
+
+/* SVG Layer with Huge Negative Offset to cover all quadrants */
+svg#connectionsLayer { 
+    position: absolute; 
+    top: -100000px; left: -100000px; 
+    width: 200000px; height: 200000px; 
+    overflow: visible; 
+    pointer-events: none; 
+    z-index: 0; 
+}
 
 /* TABLES */
-.db-table { position: absolute; background: var(--table-bg); border: 1px solid var(--table-border); width: 200px; border-radius: 6px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); z-index: 10; display: flex; flex-direction: column; transition: box-shadow 0.2s; }
+.db-table { 
+    position: absolute; 
+    background: var(--table-bg); 
+    border: 1px solid var(--table-border); 
+    width: 200px; 
+    border-radius: 6px; 
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); 
+    z-index: 10; 
+    display: flex; flex-direction: column; 
+    transition: box-shadow 0.2s, opacity 0.2s; 
+}
 .db-table:hover { box-shadow: 0 8px 15px -3px rgba(0, 0, 0, 0.2); z-index: 20; }
 .db-table.dimmed { opacity: 0.3; }
 
-.table-header { padding: 8px 12px; font-size: 13px; font-weight: 600; color: white; cursor: move; border-radius: 6px 6px 0 0; display: flex; justify-content: space-between; align-items: center; }
+.table-header { 
+    padding: 8px 12px; font-size: 13px; font-weight: 600; color: white; 
+    cursor: move; border-radius: 6px 6px 0 0; 
+    display: flex; justify-content: space-between; align-items: center; 
+    /* Background color is set via Inline JS now */
+}
+
+/* Group Handle (⋈) */
+.group-handle {
+    cursor: grab;
+    opacity: 0.6;
+    margin-right: 5px;
+    font-size: 14px;
+    font-weight: bold;
+}
+.group-handle:hover { opacity: 1; color: #fff; }
+
 .header-actions { display: flex; gap: 6px; }
 .btn-header { background: transparent; border: none; color: white; opacity: 0.7; cursor: pointer; font-size: 14px; }
 .btn-header:hover { opacity: 1; }
-
-/* COLOR THEMES */
-.db-table[data-color="blue"] .table-header { background-color: var(--header-blue); }
-.db-table[data-color="green"] .table-header { background-color: var(--header-green); }
-.db-table[data-color="purple"] .table-header { background-color: var(--header-purple); }
-.db-table[data-color="amber"] .table-header { background-color: var(--header-amber); }
-.db-table[data-color="red"] .table-header { background-color: var(--header-red); }
-.db-table[data-color="gray"] .table-header { background-color: var(--header-gray); }
 
 .table-body { padding: 4px 0; background: var(--table-bg); border-radius: 0 0 6px 6px; }
 .table-row { padding: 6px 12px; font-size: 12px; color: var(--table-text); display: flex; justify-content: space-between; cursor: pointer; border-left: 3px solid transparent; }
